@@ -1,0 +1,64 @@
+---
+title: "Analysis of Workout Technique"
+author: "Alex E"
+date: "February 2, 2018"
+output: html_document
+---
+
+## Acknowledgement
+
+The data used in this report came from Velloso et al.
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. 
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz55c5Tx7EY
+
+## Executive Summary
+
+This report uses the dataset from Velloso et al to build a random forest model that predicts whether a barbell lift was performed correctly or one of four different incorrect movements. The data was collected from accelerometers on the belt, arm, forearm, and dumbbell of participants. The resulting model is predicted to have an out of sample error rate of less than 5%.
+
+## Analysis
+
+First, we set up the necessary libraries and files for use.
+
+```{r, warning=FALSE, comment=""}
+library(caret); library(parallel); library(doParallel)
+cluster <- makeCluster(detectCores() - 1)
+
+if (!file.exists("training_data.csv")) {
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "training_data.csv")
+}
+
+if (!file.exists("testing_data.csv")) {
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "testing_data.csv")
+}
+```
+
+After loading the data, a quick examination with summary showed many variables had missing and/or "DIV/0" entries. These variables turned out to be kurtosis, skewness, average, and other aggregate measures of the entire dataset and were identified by their column number for removal.
+
+```{r, comment=""}
+training <- read.csv("training_data.csv")
+testing <- read.csv("testing_data.csv")
+
+dropping <- c(12:36, 50:59, 69:83, 87:101, 103:112, 125:139, 141:150)
+training <- training[, -dropping]
+testing <- testing[, -dropping]
+```
+
+Following that, we attempt to recreate the analysis performed by Velloso et al. According to their paper, they used the random forest method with 10 trees and 10-fold cross-validation. In order to speed up the analysis, we use parallel processing.
+
+```{r, comment=""}
+registerDoParallel(cluster)
+
+modFit <- train(classe ~ ., method = "rf", data = training, trControl = trainControl(method = "cv", number = 10, allowParallel = TRUE), preProcess = "pca", ntree = 10, tuneGrid = data.frame(mtry = 10))
+
+stopCluster(cluster); registerDoSEQ()
+```
+
+## Conclusion
+
+An examination of the final model shows the classification error of the training set ranges from 2% to 6% for each class of movement, and the model estimate of the out of sample error rate is a little over 4%, although these will vary each time the random forest is performed.
+
+```{r, comment=""}
+modFit$finalModel
+```
